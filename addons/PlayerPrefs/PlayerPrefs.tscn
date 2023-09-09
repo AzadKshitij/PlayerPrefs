@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://dxnwp4c3ffj0p"]
+
+[ext_resource type="Script" path="res://addons/PlayerPrefs/PlayerPrefs.gd" id="1_aydca"]
+
+[node name="PlayerPrefs" type="Node"]
+script = ExtResource("1_aydca")
