@@ -40,7 +40,7 @@ func set_player_base():
 ```
 
 ### Load data
-```gd
+```gdscript
 
 # Load individual data
 func get_player():
