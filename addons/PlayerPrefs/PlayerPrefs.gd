@@ -59,6 +59,16 @@ func get_pref(key: String, default_value):
 		return default_value
 
 
+func delete_pref(key: String):
+	if prefs.has(key):
+		prefs.erase(key)
+		await save_data()
+
+func delete_all():
+	prefs.clear()
+	await save_data()
+
+
 func save_data():
 	var file = FileAccess.open(path, FileAccess.WRITE)
 	file.store_var(prefs)

@@ -35,10 +35,10 @@ func set_player_base():
 		"color": Color(1, 2, 3, 4),
 		"item_rect": Rect2(1, 2, 3, 4)}
 	
-	PlayerPrefs.set_pref(player)
+	PlayerPrefs.set_base(player)
 
 func get_player_base():
-	PlayerPrefs.get_pref()	
+	PlayerPrefs.get_base()
 
 
 
