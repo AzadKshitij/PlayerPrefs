@@ -39,6 +39,19 @@ func set_player_base():
 	PlayerPrefs.set_base(player)
 ```
 
+
+### Signal for save data
+When ever preferences are changed, it will emit a signal. To listen to the signal, use the following code.
+
+```gdscript
+PlayerPrefs.prefs_changed.connect(_on_prefs_changed)
+
+func _on_prefs_changed(key, value):
+	print("Prefs changed:- ", key, " : ", value)
+
+```
+
+
 ### Load data
 ```gdscript
 
@@ -58,4 +71,9 @@ func get_player_base():
 	PlayerPrefs.get_base()
 ```
 
+### Check Data
+Use Editor option to check saved preferences.
+![Alt text](addons/PlayerPrefs/assets/EditorOptioon.png)
+
+It will print the data in the console.
 

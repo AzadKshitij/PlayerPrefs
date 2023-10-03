@@ -1,8 +1,11 @@
 extends Node
+class_name PlayerPref
 ## Responsible for saving Player preferences in your game.
 ##
 ## THis script is the base for the implementation and holds functions responsible for storing and retriing the data.
 ##
+
+signal prefs_changed(key: String, value)
 
 ## Holds player preferenceses
 var prefs: Dictionary = {}
@@ -26,6 +29,8 @@ func _init() -> void:
 ## [/codeblock]
 func set_base(value: Dictionary):
 	prefs = value
+	prefs_changed.emit("base", value)
+	await save_data()
 
 
 ## For getting base values of player prefs
@@ -44,6 +49,7 @@ func get_base() -> Dictionary:
 ## [/codeblock]
 func set_pref(key: String, value):
 	prefs[key] = value
+	prefs_changed.emit(key, value)
 	await save_data()
 
 
@@ -63,6 +69,7 @@ func delete_pref(key: String):
 	if prefs.has(key):
 		prefs.erase(key)
 		await save_data()
+
 
 func delete_all():
 	prefs.clear()

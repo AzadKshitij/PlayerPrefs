@@ -16,6 +16,7 @@ func save_player():
 	PlayerPrefs.set_pref("color", Color(1, 2, 3, 4))
 	PlayerPrefs.set_pref("item_rect", Rect2(1, 2, 3, 4))
 
+
 func get_player():
 	PlayerPrefs.get_pref("no", 0)
 	PlayerPrefs.get_pref("name", "")
@@ -27,21 +28,21 @@ func get_player():
 
 
 func set_player_base():
-	var player = {"no": 1, 
+	var player = {
+		"no": 1,
 		"score": 0,
 		"crosshair_position": Vector2(1, 2),
 		"player_position": Vector3(1, 2, 3),
 		"random_info": Vector4(1, 2, 3, 4),
 		"color": Color(1, 2, 3, 4),
-		"item_rect": Rect2(1, 2, 3, 4)}
-	
+		"item_rect": Rect2(1, 2, 3, 4)
+	}
+
 	PlayerPrefs.set_base(player)
+
 
 func get_player_base():
 	PlayerPrefs.get_base()
-
-
-
 	assert(PlayerPrefs.get_pref("test", 0) == 1)
 	assert(PlayerPrefs.get_pref("test2", 0) == "test")
 	assert(PlayerPrefs.get_pref("test3", 0) == Vector2(1, 2))
@@ -51,3 +52,10 @@ func get_player_base():
 	assert(PlayerPrefs.get_pref("test7", 0) == Rect2(1, 2, 3, 4))
 
 	print("All tests passed!")
+
+
+func test():
+	save_player()
+	get_player()
+	set_player_base()
+	get_player_base()

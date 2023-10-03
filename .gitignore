@@ -1,3 +1,4 @@
 # Godot 4+ specific ignores
 .godot/
 *.7z
+addons/PlayerPrefs.zip
