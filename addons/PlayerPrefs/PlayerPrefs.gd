@@ -2,35 +2,39 @@ extends Node
 class_name PlayerPref
 ## Responsible for saving Player preferences in your game.
 ##
-## THis script is the base for the implementation and holds functions responsible for storing and retriing the data.
+## This script is the base for the implementation and holds functions responsible for storing and retrieving the data.
 ##
+## Data is written synchronously to [member path] as an unencrypted Variant stream
+## via [code]FileAccess.store_var()[/code].
 
 signal prefs_changed(key: String, value)
 
-## Holds player preferenceses
+## Holds player preferences
 var prefs: Dictionary = {}
 var filename: String = "prefs.save"
 var path: String = "user://"
 
 
 func _init() -> void:
-	print("Initializing PlayerPrefs")
 	path = path + filename
-	if not FileAccess.file_exists(path):
-		save_data()
-	else:
+
+
+func _ready() -> void:
+	if FileAccess.file_exists(path):
 		load_data()
+	else:
+		save_data()
 
 
 ## For setting base values for player prefs
 ## Usage:
 ## [codeblock]
-## PlayerPrefs.set_pref({"health": 100, "score": 0})
+## PlayerPrefs.set_base({"health": 100, "score": 0})
 ## [/codeblock]
-func set_base(value: Dictionary):
+func set_base(value: Dictionary) -> void:
 	prefs = value
 	prefs_changed.emit("base", value)
-	await save_data()
+	save_data()
 
 
 ## For getting base values of player prefs
@@ -47,16 +51,16 @@ func get_base() -> Dictionary:
 ## [codeblock]
 ## PlayerPrefs.set_pref("health", 0)
 ## [/codeblock]
-func set_pref(key: String, value):
+func set_pref(key: String, value) -> void:
 	prefs[key] = value
 	prefs_changed.emit(key, value)
-	await save_data()
+	save_data()
 
 
 ## To get a preference provided "key"
 ## Usage:
 ## [codeblock]
-## PlayerPrefs.get_prefs("health", 0)
+## PlayerPrefs.get_pref("health", 0)
 ## [/codeblock]
 func get_pref(key: String, default_value):
 	if prefs.has(key):
@@ -65,27 +69,34 @@ func get_pref(key: String, default_value):
 		return default_value
 
 
-func delete_pref(key: String):
+## Deletes a preference provided "key"
+func delete_pref(key: String) -> void:
 	if prefs.has(key):
 		prefs.erase(key)
-		await save_data()
+		save_data()
 
 
-func delete_all():
+## Deletes all preferences
+func delete_all() -> void:
 	prefs.clear()
-	await save_data()
+	save_data()
 
 
-func save_data():
+## Saves [member prefs] to [member path] synchronously
+func save_data() -> void:
 	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_error("PlayerPrefs: Could not open file for writing: %s" % path)
+		return
 	file.store_var(prefs)
 	file.close()
 
 
-func load_data():
+## Loads [member prefs] from [member path]
+func load_data() -> void:
 	var file = FileAccess.open(path, FileAccess.READ)
-	if file:
-		prefs = file.get_var()
-	else:
-		save_data()
+	if file == null:
+		push_error("PlayerPrefs: Could not open file for reading: %s" % path)
+		return
+	prefs = file.get_var()
 	file.close()

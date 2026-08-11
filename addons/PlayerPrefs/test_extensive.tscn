@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://isq0s5op0vm3"]
+
+[ext_resource type="Script" uid="uid://wtwlporrwldo" path="res://addons/PlayerPrefs/test_extensive.gd" id="1_ext"]
+
+[node name="test_extensive" type="Node" unique_id=1761970798]
+script = ExtResource("1_ext")

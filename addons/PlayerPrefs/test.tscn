@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3 uid="uid://djdriymi8k0af"]
+[gd_scene format=3 uid="uid://djdriymi8k0af"]
 
-[ext_resource type="Script" path="res://addons/PlayerPrefs/test.gd" id="1_58gxt"]
+[ext_resource type="Script" uid="uid://cmiyt0npda56b" path="res://addons/PlayerPrefs/test.gd" id="1_58gxt"]
 
-[node name="test" type="Node"]
+[node name="test" type="Node" unique_id=157105983]
 script = ExtResource("1_58gxt")

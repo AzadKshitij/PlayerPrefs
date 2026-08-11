@@ -18,13 +18,13 @@ func save_player():
 
 
 func get_player():
-	PlayerPrefs.get_pref("no", 0)
-	PlayerPrefs.get_pref("name", "")
-	PlayerPrefs.get_pref("crosshair_position", Vector2(0, 0))
-	PlayerPrefs.get_pref("player_position", Vector3(0, 0, 0))
-	PlayerPrefs.get_pref("random_info", Vector4(0, 0, 0, 0))
-	PlayerPrefs.get_pref("color", Color(0, 0, 0, 0))
-	PlayerPrefs.get_pref("item_rect", Rect2(0, 0, 0, 0))
+	assert(PlayerPrefs.get_pref("no", 0) == 1)
+	assert(PlayerPrefs.get_pref("name", "") == "godot")
+	assert(PlayerPrefs.get_pref("crosshair_position", Vector2(0, 0)) == Vector2(1, 2))
+	assert(PlayerPrefs.get_pref("player_position", Vector3(0, 0, 0)) == Vector3(1, 2, 3))
+	assert(PlayerPrefs.get_pref("random_info", Vector4(0, 0, 0, 0)) == Vector4(1, 2, 3, 4))
+	assert(PlayerPrefs.get_pref("color", Color(0, 0, 0, 0)) == Color(1, 2, 3, 4))
+	assert(PlayerPrefs.get_pref("item_rect", Rect2(0, 0, 0, 0)) == Rect2(1, 2, 3, 4))
 
 
 func set_player_base():
@@ -42,20 +42,27 @@ func set_player_base():
 
 
 func get_player_base():
-	PlayerPrefs.get_base()
-	assert(PlayerPrefs.get_pref("test", 0) == 1)
-	assert(PlayerPrefs.get_pref("test2", 0) == "test")
-	assert(PlayerPrefs.get_pref("test3", 0) == Vector2(1, 2))
-	assert(PlayerPrefs.get_pref("test4", 0) == Vector3(1, 2, 3))
-	assert(PlayerPrefs.get_pref("test5", 0) == Vector4(1, 2, 3, 4))
-	assert(PlayerPrefs.get_pref("test6", 0) == Color(1, 2, 3, 4))
-	assert(PlayerPrefs.get_pref("test7", 0) == Rect2(1, 2, 3, 4))
+	var base = PlayerPrefs.get_base()
+	assert(base.get("no") == 1)
+	assert(base.get("score") == 0)
+	assert(base.get("crosshair_position") == Vector2(1, 2))
+	assert(base.get("player_position") == Vector3(1, 2, 3))
+	assert(base.get("random_info") == Vector4(1, 2, 3, 4))
+	assert(base.get("color") == Color(1, 2, 3, 4))
+	assert(base.get("item_rect") == Rect2(1, 2, 3, 4))
+	assert(PlayerPrefs.get_pref("no", -1) == 1)
+	assert(PlayerPrefs.get_pref("score", -1) == 0)
+	assert(PlayerPrefs.get_pref("crosshair_position", Vector2(0, 0)) == Vector2(1, 2))
+	assert(PlayerPrefs.get_pref("player_position", Vector3(0, 0, 0)) == Vector3(1, 2, 3))
+	assert(PlayerPrefs.get_pref("random_info", Vector4(0, 0, 0, 0)) == Vector4(1, 2, 3, 4))
+	assert(PlayerPrefs.get_pref("color", Color(0, 0, 0, 0)) == Color(1, 2, 3, 4))
+	assert(PlayerPrefs.get_pref("item_rect", Rect2(0, 0, 0, 0)) == Rect2(1, 2, 3, 4))
 
 	print("All tests passed!")
 
 
 func test():
 	save_player()
-	get_player()
-	set_player_base()
-	get_player_base()
+	#get_player()
+	#set_player_base()
+	#get_player_base()
