@@ -45,6 +45,12 @@ func _run_all_tests() -> void:
 	_test_delete_pref()
 	_test_delete_all()
 	_test_prefs_changed_signal()
+	_test_typed_getters()
+	_test_save_on_write_off()
+	_test_json_roundtrip()
+	_test_slots()
+	_test_version_migration()
+	_test_signals()
 	_test_persistence_across_instances()
 	_test_save_file_on_disk()
 
@@ -189,6 +195,173 @@ func _on_prefs_changed(key: String, value) -> void:
 	_signal_log.append([key, value])
 
 
+func _test_typed_getters() -> void:
+	_section("Typed getters")
+	PlayerPrefs.set_pref("gi", 42)
+	PlayerPrefs.set_pref("gf", 2.5)
+	PlayerPrefs.set_pref("gs", "text")
+	PlayerPrefs.set_pref("gb", true)
+	PlayerPrefs.set_pref("gv2", Vector2(1, 2))
+	PlayerPrefs.set_pref("gv3", Vector3(1, 2, 3))
+	PlayerPrefs.set_pref("gv4", Vector4(1, 2, 3, 4))
+	PlayerPrefs.set_pref("gc", Color(0.1, 0.2, 0.3, 1))
+	PlayerPrefs.set_pref("gr", Rect2(1, 2, 3, 4))
+	PlayerPrefs.set_pref("ga", [1, "two"])
+	PlayerPrefs.set_pref("gd", {"k": 1})
+	_check(PlayerPrefs.get_int("gi", 0) == 42, "get_int returns the stored int")
+	_check(PlayerPrefs.get_float("gf", 0) == 2.5, "get_float returns the stored float")
+	_check(PlayerPrefs.get_string("gs", "") == "text", "get_string returns the stored string")
+	_check(PlayerPrefs.get_bool("gb", false), "get_bool returns the stored bool")
+	_check(PlayerPrefs.get_vec2("gv2", Vector2.ZERO) == Vector2(1, 2), "get_vec2 returns the stored Vector2")
+	_check(PlayerPrefs.get_vec3("gv3", Vector3.ZERO) == Vector3(1, 2, 3), "get_vec3 returns the stored Vector3")
+	_check(PlayerPrefs.get_vec4("gv4", Vector4.ZERO) == Vector4(1, 2, 3, 4), "get_vec4 returns the stored Vector4")
+	_check(PlayerPrefs.get_color("gc", Color.WHITE) == Color(0.1, 0.2, 0.3, 1), "get_color returns the stored Color")
+	_check(PlayerPrefs.get_rect2("gr", Rect2()) == Rect2(1, 2, 3, 4), "get_rect2 returns the stored Rect2")
+	_check(PlayerPrefs.get_array("ga", []) == [1, "two"], "get_array returns the stored Array")
+	_check(PlayerPrefs.get_dictionary("gd", {}) == {"k": 1}, "get_dictionary returns the stored Dictionary")
+	_check(PlayerPrefs.get_int("gs", -1) == -1, "get_int falls back for a non-int value")
+	_check(PlayerPrefs.get_vec2("missing", Vector2(9, 9)) == Vector2(9, 9), "get_vec2 falls back for a missing key")
+	_check(PlayerPrefs.get_bool("missing", true), "get_bool falls back for a missing key")
+
+
+func _raw_saved_data() -> Dictionary:
+	var file = FileAccess.open(PlayerPrefs.path, FileAccess.READ)
+	if file == null:
+		return {}
+	var loaded: Variant
+	if file.get_buffer(4).get_string_from_ascii() == "PPFS":
+		file.get_8()
+		loaded = file.get_var()
+	else:
+		file.seek(0)
+		loaded = file.get_var()
+	file.close()
+	if loaded is Dictionary and loaded.get("data", null) is Dictionary:
+		return loaded["data"]
+	return {}
+
+
+func _test_save_on_write_off() -> void:
+	_section("save_on_write = false")
+	PlayerPrefs.save_on_write = false
+	PlayerPrefs.set_pref("deferred", 123)
+	_check(not _raw_saved_data().has("deferred"), "mutation is not saved while save_on_write is false")
+	_check(PlayerPrefs.save_data(), "explicit save_data returns true")
+	_check(_raw_saved_data().get("deferred", 0) == 123, "explicit save_data persists the pending change")
+	PlayerPrefs.save_on_write = true
+	PlayerPrefs.delete_pref("deferred")
+
+
+func _test_json_roundtrip() -> void:
+	_section("JSON export / import")
+	PlayerPrefs.set_pref("json_int", 42)
+	PlayerPrefs.set_pref("json_float", 1.5)
+	PlayerPrefs.set_pref("json_string", "hello world")
+	PlayerPrefs.set_pref("json_bool", false)
+	PlayerPrefs.set_pref("json_vec2", Vector2(3, 4))
+	PlayerPrefs.set_pref("json_color", Color(0.1, 0.2, 0.3, 0.4))
+	PlayerPrefs.set_pref("json_dict", {"nested": [1, 2]})
+	var json_path := "user://test_prefs_export.json"
+	_check(PlayerPrefs.export_json(json_path), "export_json returns true")
+	_check(FileAccess.file_exists(json_path), "exported JSON file exists")
+	PlayerPrefs.delete_all()
+	_check(PlayerPrefs.import_json(json_path), "import_json returns true")
+	_check(PlayerPrefs.get_pref("json_int", 0) == 42, "JSON roundtrip int")
+	_check(PlayerPrefs.get_pref("json_float", 0.0) == 1.5, "JSON roundtrip float")
+	_check(PlayerPrefs.get_pref("json_string", "") == "hello world", "JSON roundtrip string")
+	_check(PlayerPrefs.get_pref("json_bool", true) == false, "JSON roundtrip bool")
+	_check(PlayerPrefs.get_pref("json_vec2", Vector2.ZERO) == Vector2(3, 4), "JSON roundtrip Vector2")
+	_check(PlayerPrefs.get_pref("json_color", Color.WHITE).is_equal_approx(Color(0.1, 0.2, 0.3, 0.4)), "JSON roundtrip Color")
+	_check(PlayerPrefs.get_pref("json_dict", {}) == {"nested": [1, 2]}, "JSON roundtrip nested Dictionary/Array")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(json_path))
+	_check(not FileAccess.file_exists(json_path), "test JSON file is cleaned up")
+
+
+func _test_slots() -> void:
+	_section("Save slots")
+	PlayerPrefs.set_pref("slot_base_marker", 1)
+	PlayerPrefs.set_slot("profile_a")
+	_check(PlayerPrefs.get_active_slot() == "profile_a", "active slot switches to the new slot")
+	_check(PlayerPrefs.path == "user://prefs_profile_a.save", "slot path follows the slot name")
+	_check(PlayerPrefs.get_pref("slot_base_marker", -1) == -1, "new slot starts empty, isolated from the default slot")
+	PlayerPrefs.set_pref("slot_only", "a")
+	PlayerPrefs.set_slot("")
+	_check(PlayerPrefs.get_pref("slot_only", "") == "", "default slot does not see slot data")
+	_check(PlayerPrefs.get_pref("slot_base_marker", -1) == 1, "default slot data is restored after switching back")
+	PlayerPrefs.set_slot("profile_a")
+	_check(PlayerPrefs.get_pref("slot_only", "") == "a", "slot data persists across switches")
+	_check(PlayerPrefs.list_slots().has("profile_a"), "list_slots reports the new slot")
+	PlayerPrefs.delete_slot("profile_a")
+	_check(not PlayerPrefs.list_slots().has("profile_a"), "delete_slot removes the slot file")
+	PlayerPrefs.set_slot("")
+	_check(PlayerPrefs.list_slots().has(""), "list_slots always reports the default slot")
+
+
+func _test_version_migration() -> void:
+	_section("Version migration")
+	PlayerPrefs.save_version = 1
+	PlayerPrefs.set_pref("mig_marker", "v1")
+	PlayerPrefs.migration_callback = Callable(self, "_on_migrate")
+	PlayerPrefs.save_version = 2
+	PlayerPrefs.load_data()
+	_check(PlayerPrefs.last_loaded_version == 1, "last_loaded_version reports the loaded file version")
+	_check(PlayerPrefs.get_pref("mig_added", false), "migration callback result is applied to prefs")
+	_check(PlayerPrefs.get_pref("mig_marker", "") == "v1", "original data survives migration")
+	PlayerPrefs.save_version = 1
+	PlayerPrefs.migration_callback = Callable()
+
+
+func _on_migrate(from_prefs: Dictionary, from_version: int) -> Dictionary:
+	from_prefs["mig_added"] = true
+	return from_prefs
+
+
+func _test_signals() -> void:
+	_section("New signals")
+	_signal_log.clear()
+	PlayerPrefs.pref_deleted.connect(_on_pref_deleted)
+	PlayerPrefs.prefs_cleared.connect(_on_prefs_cleared)
+	PlayerPrefs.prefs_loaded.connect(_on_prefs_loaded)
+	PlayerPrefs.slot_changed.connect(_on_slot_changed)
+
+	PlayerPrefs.set_pref("sig_keep", 1)
+	PlayerPrefs.set_pref("sig_delete", 2)
+	PlayerPrefs.delete_pref("sig_delete")
+	_check(_signal_log.has("pref_deleted:sig_delete"), "pref_deleted fires with the deleted key")
+
+	PlayerPrefs.delete_all()
+	_check(_signal_log.has("prefs_cleared"), "prefs_cleared fires on delete_all")
+
+	PlayerPrefs.load_data()
+	_check(_signal_log.has("prefs_loaded"), "prefs_loaded fires after load_data")
+
+	PlayerPrefs.set_slot("sig_slot")
+	_check(_signal_log.has("slot_changed:sig_slot"), "slot_changed fires with the slot name")
+	PlayerPrefs.set_slot("")
+	PlayerPrefs.delete_slot("sig_slot")
+
+	PlayerPrefs.pref_deleted.disconnect(_on_pref_deleted)
+	PlayerPrefs.prefs_cleared.disconnect(_on_prefs_cleared)
+	PlayerPrefs.prefs_loaded.disconnect(_on_prefs_loaded)
+	PlayerPrefs.slot_changed.disconnect(_on_slot_changed)
+
+
+func _on_pref_deleted(key: String) -> void:
+	_signal_log.append("pref_deleted:" + key)
+
+
+func _on_prefs_cleared() -> void:
+	_signal_log.append("prefs_cleared")
+
+
+func _on_prefs_loaded() -> void:
+	_signal_log.append("prefs_loaded")
+
+
+func _on_slot_changed(slot_name: String) -> void:
+	_signal_log.append("slot_changed:" + slot_name)
+
+
 func _test_persistence_across_instances() -> void:
 	_section("Persistence across instances")
 	PlayerPrefs.set_pref("persist_int", 777)
@@ -214,7 +387,12 @@ func _test_save_file_on_disk() -> void:
 	var file = FileAccess.open(PlayerPrefs.path, FileAccess.READ)
 	_check(file != null, "save file is readable")
 	if file:
+		var magic: String = file.get_buffer(4).get_string_from_ascii()
+		var format: int = file.get_8()
 		var loaded: Variant = file.get_var()
 		file.close()
+		_check(magic == "PPFS", "file starts with the PPFS magic header")
+		_check(format == 0, "file uses the plaintext format marker")
 		_check(loaded is Dictionary, "file content deserializes to a Dictionary")
-		_check(loaded.get("file_check", "") == "present", "file content contains the latest values")
+		_check(loaded.get("data", {}).get("file_check", "") == "present", "file content contains the latest values")
+	_check(FileAccess.file_exists(PlayerPrefs.path + ".bak"), "backup file is created after the first save")
