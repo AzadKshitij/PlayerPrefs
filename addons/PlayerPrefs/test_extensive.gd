@@ -49,6 +49,9 @@ func _run_all_tests() -> void:
 	_test_save_on_write_off()
 	_test_json_roundtrip()
 	_test_slots()
+	_test_rename_slot()
+	_test_restore_prefs()
+	_test_user_dir()
 	_test_version_migration()
 	_test_signals()
 	_test_persistence_across_instances()
@@ -295,6 +298,77 @@ func _test_slots() -> void:
 	_check(not PlayerPrefs.list_slots().has("profile_a"), "delete_slot removes the slot file")
 	PlayerPrefs.set_slot("")
 	_check(PlayerPrefs.list_slots().has(""), "list_slots always reports the default slot")
+
+
+func _test_rename_slot() -> void:
+	_section("Rename slot")
+	PlayerPrefs.set_slot("ren_source")
+	PlayerPrefs.set_pref("ren_marker", 42)
+	PlayerPrefs.set_slot("")
+	_check(PlayerPrefs.rename_slot("ren_source", "ren_target"), "rename_slot returns true")
+	_check(not PlayerPrefs.list_slots().has("ren_source"), "old slot name is gone after rename")
+	_check(PlayerPrefs.list_slots().has("ren_target"), "new slot name is listed after rename")
+	var moved = load("res://addons/PlayerPrefs/PlayerPrefs.gd").new()
+	moved.filename = "prefs.save"
+	moved.path = "user://prefs_ren_target.save"
+	add_child(moved)
+	_check(moved.get_pref("ren_marker", -1) == 42, "renamed slot data loads from the new file")
+	remove_child(moved)
+	moved.free()
+	_check(not PlayerPrefs.rename_slot("ghost_slot", "target"), "renaming a nonexistent slot fails")
+	_check(not PlayerPrefs.rename_slot("", "target"), "renaming the default slot fails")
+	_check(PlayerPrefs.rename_slot("ren_target", "ren_target"), "renaming a slot to itself is a no-op success")
+	_check(PlayerPrefs.rename_slot("ren_target", "ren target!"), "renaming to a name needing sanitizing succeeds")
+	_check(PlayerPrefs.list_slots().has("ren_target_"), "sanitized rename target maps to a valid file name")
+	_check(not PlayerPrefs.list_slots().has("ren_target"), "sanitized rename removes the old slot")
+	PlayerPrefs.delete_slot("ren_target_")
+	PlayerPrefs.set_slot("")
+
+
+func _test_restore_prefs() -> void:
+	_section("restore_prefs")
+	PlayerPrefs.set_pref("restore_a", 1)
+	PlayerPrefs.set_pref("restore_b", 2)
+	PlayerPrefs.restore_prefs({"restore_a": 99})
+	_check(PlayerPrefs.get_pref("restore_a", -1) == 99, "restore_prefs replaces the value")
+	_check(not PlayerPrefs.has_pref("restore_b"), "restore_prefs removes keys not in the snapshot")
+	var restored = load("res://addons/PlayerPrefs/PlayerPrefs.gd").new()
+	add_child(restored)
+	_check(restored.get_pref("restore_a", -1) == 99, "restore_prefs persists changes to disk")
+	remove_child(restored)
+	restored.free()
+	PlayerPrefs.delete_all()
+
+
+func _test_user_dir() -> void:
+	_section("user_dir")
+	var temp_dir := "C:/Users/azadk/AppData/Local/Temp/opencode/pp_test"
+	DirAccess.make_dir_recursive_absolute(temp_dir)
+	var p = load("res://addons/PlayerPrefs/PlayerPrefs.gd").new()
+	p.user_dir = temp_dir + "/"
+	p.path = p.user_dir + p.filename
+	add_child(p)
+	p.set_pref("test_key", 123)
+	_check(p.get_pref("test_key", -1) == 123, "user_dir instance saves to the custom directory")
+	var dir_node = load("res://addons/PlayerPrefs/PlayerPrefs.gd").new()
+	dir_node.user_dir = temp_dir + "/"
+	dir_node.path = dir_node.user_dir + dir_node.filename
+	add_child(dir_node)
+	_check(dir_node.get_pref("test_key", -1) == 123, "a second instance reads from the same custom directory")
+	p.set_slot("private")
+	p.set_pref("secret", true)
+	_check(p.list_slots().has("private"), "list_slots scans the custom directory")
+	_check(not PlayerPrefs.list_slots().has("private"), "default user_dir slots are not confused with custom ones")
+	p.delete_slot("private")
+	remove_child(p)
+	p.free()
+	remove_child(dir_node)
+	dir_node.free()
+	DirAccess.remove_absolute(temp_dir + "/prefs.save")
+	DirAccess.remove_absolute(temp_dir + "/prefs.save.bak")
+	DirAccess.remove_absolute(temp_dir + "/prefs_private.save")
+	DirAccess.remove_absolute(temp_dir + "/prefs_private.save.bak")
+	DirAccess.remove_absolute(temp_dir)
 
 
 func _test_version_migration() -> void:

@@ -3,15 +3,39 @@ extends VBoxContainer
 
 const DEFAULT_SLOT_TEXT := "(default)"
 
+const TYPE_COLORS := {
+	"int": Color(0.55, 0.75, 1.0, 1.0),
+	"float": Color(0.4, 0.75, 0.9, 1.0),
+	"str": Color(0.85, 0.85, 0.4, 1.0),
+	"bool": Color(0.5, 0.85, 0.5, 1.0),
+	"vec2": Color(0.75, 0.55, 0.95, 1.0),
+	"vec3": Color(0.75, 0.55, 0.95, 1.0),
+	"vec4": Color(0.75, 0.55, 0.95, 1.0),
+	"color": Color(0.95, 0.6, 0.6, 1.0),
+	"rect2": Color(0.7, 0.7, 0.9, 1.0),
+	"dict": Color(0.4, 0.9, 0.7, 1.0),
+	"array": Color(0.4, 0.7, 0.9, 1.0),
+	"nil": Color(0.6, 0.6, 0.6, 1.0)
+}
+
 var _prefs_node: PlayerPref
 var _owns_node: bool = false
 var _slot_option: OptionButton
+var _rename_edit: LineEdit
+var _filter_edit: LineEdit
 var _tree: Tree
 var _key_edit: LineEdit
 var _value_edit: LineEdit
+var _undo_btn: Button
+var _delete_slot_btn: Button
+var _confirmation: ConfirmationDialog
 var _export_dialog: FileDialog
 var _import_dialog: FileDialog
 var _last_modified: Dictionary = {}
+var _undo_snapshot: Dictionary = {}
+var _undo_slot: String = ""
+var _last_slot_list: Array = []
+var _has_built_ui: bool = false
 
 
 ## Returns the absolute directory the running game writes its save files to
@@ -27,6 +51,8 @@ static func runtime_user_dir() -> String:
 
 
 func _ready() -> void:
+	if _has_built_ui:
+		return
 	_prefs_node = get_node_or_null("/root/PlayerPrefs")
 	_owns_node = _prefs_node == null
 	if _owns_node:
@@ -41,6 +67,7 @@ func _ready() -> void:
 	else:
 		_prefs_node.delete_all()
 	_build_ui()
+	_has_built_ui = true
 	refresh()
 	_setup_autorefresh()
 
@@ -54,11 +81,12 @@ func _setup_autorefresh() -> void:
 
 
 func _on_autorefresh_timeout() -> void:
-	if not is_visible_in_tree():
+	if not is_visible_in_tree() or _prefs_node == null:
+		return
+	if _slot_option != null and _slot_option.get_popup() != null and _slot_option.get_popup().visible:
 		return
 	var stamp := FileAccess.get_modified_time(_prefs_node.path)
 	if _last_modified.get(_prefs_node.path, -1.0) != stamp:
-		_last_modified[_prefs_node.path] = stamp
 		refresh()
 
 
@@ -70,6 +98,12 @@ func _build_ui() -> void:
 	path_label.add_theme_font_size_override("font_size", 10)
 	add_child(path_label)
 
+	_filter_edit = LineEdit.new()
+	_filter_edit.placeholder_text = "filter…"
+	_filter_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_filter_edit.text_changed.connect(_on_filter_changed)
+	add_child(_filter_edit)
+
 	var top := HBoxContainer.new()
 	top.add_child(Label.new())
 
@@ -80,16 +114,43 @@ func _build_ui() -> void:
 
 	var refresh_btn := Button.new()
 	refresh_btn.text = "Refresh"
-	refresh_btn.pressed.connect(refresh)
+	refresh_btn.pressed.connect(_on_refresh_pressed)
 	top.add_child(refresh_btn)
 	add_child(top)
 
+	var slot_row := HBoxContainer.new()
+	var rename_label := Label.new()
+	rename_label.text = "Rename slot:"
+	slot_row.add_child(rename_label)
+	_rename_edit = LineEdit.new()
+	_rename_edit.placeholder_text = "new name"
+	_rename_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_rename_edit.text_submitted.connect(_on_rename_text_submitted)
+	slot_row.add_child(_rename_edit)
+	var rename_btn := Button.new()
+	rename_btn.text = "Rename"
+	rename_btn.pressed.connect(_on_rename_pressed)
+	slot_row.add_child(rename_btn)
+	_delete_slot_btn = Button.new()
+	_delete_slot_btn.text = "Delete Slot"
+	_delete_slot_btn.pressed.connect(_on_delete_slot_pressed)
+	slot_row.add_child(_delete_slot_btn)
+	add_child(slot_row)
+
+	_confirmation = ConfirmationDialog.new()
+	_confirmation.title = "Delete slot"
+	_confirmation.ok_button_text = "Delete"
+	_confirmation.confirmed.connect(_on_delete_slot_confirmed)
+	add_child(_confirmation)
+
 	_tree = Tree.new()
-	_tree.columns = 2
+	_tree.columns = 3
 	_tree.set_column_title(0, "Key")
 	_tree.set_column_title(1, "Value")
+	_tree.set_column_title(2, "Type")
 	_tree.set_column_expand(0, false)
 	_tree.set_column_custom_minimum_width(0, 160)
+	_tree.set_column_custom_minimum_width(1, 200)
 	_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_tree.cell_selected.connect(_on_tree_cell_selected)
 	add_child(_tree)
@@ -126,6 +187,12 @@ func _build_ui() -> void:
 	import_btn.text = "Import JSON"
 	import_btn.pressed.connect(_on_import_pressed)
 	action_row.add_child(import_btn)
+	_undo_btn = Button.new()
+	_undo_btn.text = "Undo"
+	_undo_btn.tooltip_text = "Revert the last Set / Delete / Clear / Import"
+	_undo_btn.pressed.connect(_on_undo_pressed)
+	_undo_btn.disabled = true
+	action_row.add_child(_undo_btn)
 	add_child(action_row)
 
 	_export_dialog = FileDialog.new()
@@ -144,24 +211,124 @@ func _build_ui() -> void:
 
 
 func refresh() -> void:
-	_last_modified[_prefs_node.path] = FileAccess.get_modified_time(_prefs_node.path)
+	if _prefs_node == null or _slot_option == null or _delete_slot_btn == null or _undo_btn == null or _tree == null or _filter_edit == null:
+		return
+	_reload_if_changed()
+	_render()
 
+
+## Force-reload from disk (Refresh button) and re-render.
+func _on_refresh_pressed() -> void:
+	if _prefs_node == null:
+		return
+	_reload_from_disk()
+	_last_modified[_prefs_node.path] = FileAccess.get_modified_time(_prefs_node.path)
+	_render()
+
+
+func _reload_if_changed() -> void:
+	var stamp := FileAccess.get_modified_time(_prefs_node.path)
+	if _last_modified.get(_prefs_node.path, -1.0) != stamp:
+		_last_modified[_prefs_node.path] = stamp
+		_reload_from_disk()
+
+
+func _reload_from_disk() -> void:
+	if FileAccess.file_exists(_prefs_node.path):
+		_prefs_node.load_data()
+	else:
+		_prefs_node.prefs.clear()
+		_prefs_node._dirty = false
+
+
+func _render() -> void:
+	var active_slot := _prefs_node.get_active_slot()
+	_render_slot_option(active_slot)
+
+	_delete_slot_btn.disabled = active_slot == ""
+	_undo_btn.disabled = _undo_snapshot.is_empty() or _undo_slot != active_slot
+
+	_tree.clear()
+	var root := _tree.create_item()
+	root.set_text(0, "PlayerPrefs")
+	var filter_text := _filter_edit.text.strip_edges().to_lower()
+	for key in _prefs_node.get_all():
+		var value = _prefs_node.get_pref(key, null)
+		var rendered := var_to_str(value)
+		if _matches(filter_text, key, rendered):
+			var item := _tree.create_item(root)
+			item.set_text(0, key)
+			item.set_text(1, rendered)
+			item.set_text(2, _type_name(value))
+			item.set_custom_color(2, _type_color(value))
+
+
+## Rebuilds the slot dropdown only when the list of available slots actually
+## changed. Rebuilding every refresh destroys the open popup and makes the
+## first selection feel broken.
+func _render_slot_option(active_slot: String) -> void:
+	var slots: Array = _prefs_node.list_slots()
+	if _slots_equal(slots, _last_slot_list):
+		return
+	_last_slot_list = slots
 	_slot_option.clear()
-	for slot in _prefs_node.list_slots():
+	for slot in slots:
 		_slot_option.add_item(_slot_text(slot))
-	var active := _slot_text(_prefs_node.get_active_slot())
+	var active := _slot_text(active_slot)
 	for i in _slot_option.item_count:
 		if _slot_option.get_item_text(i) == active:
 			_slot_option.select(i)
 			break
 
-	_tree.clear()
-	var root := _tree.create_item()
-	root.set_text(0, "PlayerPrefs")
-	for key in _prefs_node.get_all():
-		var item := _tree.create_item(root)
-		item.set_text(0, key)
-		item.set_text(1, var_to_str(_prefs_node.get_pref(key, null)))
+
+func _slots_equal(a: Array, b: Array) -> bool:
+	if a.size() != b.size():
+		return false
+	for i in a.size():
+		if a[i] != b[i]:
+			return false
+	return true
+
+
+func _matches(filter_text: String, key: String, rendered: String) -> bool:
+	if filter_text.is_empty():
+		return true
+	return key.to_lower().contains(filter_text) or rendered.to_lower().contains(filter_text)
+
+
+func _type_name(value: Variant) -> String:
+	match typeof(value):
+		TYPE_INT:
+			return "int"
+		TYPE_FLOAT:
+			return "float"
+		TYPE_STRING:
+			return "str"
+		TYPE_BOOL:
+			return "bool"
+		TYPE_VECTOR2:
+			return "vec2"
+		TYPE_VECTOR3:
+			return "vec3"
+		TYPE_VECTOR4:
+			return "vec4"
+		TYPE_COLOR:
+			return "color"
+		TYPE_RECT2:
+			return "rect2"
+		TYPE_DICTIONARY:
+			return "dict"
+		TYPE_ARRAY:
+			return "array"
+		_:
+			return "other"
+
+
+func _type_color(value: Variant) -> Color:
+	var name := _type_name(value)
+	if TYPE_COLORS.has(name):
+		return TYPE_COLORS[name]
+	return TYPE_COLORS["str"]
 
 
 func _slot_text(slot: String) -> String:
@@ -171,7 +338,47 @@ func _slot_text(slot: String) -> String:
 func _on_slot_selected(index: int) -> void:
 	var text: String = _slot_option.get_item_text(index)
 	var slot := "" if text == DEFAULT_SLOT_TEXT else text
+	if slot == _prefs_node.get_active_slot():
+		return
+	_clear_undo()
 	_prefs_node.set_slot(slot)
+	refresh.call_deferred()
+
+
+func _on_rename_text_submitted(_new_text: String) -> void:
+	_on_rename_pressed()
+
+
+func _on_rename_pressed() -> void:
+	var new_name := _rename_edit.text.strip_edges()
+	_rename_edit.text = ""
+	if new_name == "":
+		return
+	var old_name := _prefs_node.get_active_slot()
+	if old_name == "" or new_name == old_name:
+		return
+	_clear_undo()
+	if _prefs_node.rename_slot(old_name, new_name):
+		refresh()
+
+
+func _on_delete_slot_pressed() -> void:
+	if _prefs_node.get_active_slot() == "":
+		return
+	_confirmation.dialog_text = "Delete the '%s' slot? Its save files will be removed." % _prefs_node.get_active_slot()
+	_confirmation.popup_centered_ratio(0.3)
+
+
+func _on_delete_slot_confirmed() -> void:
+	var slot := _prefs_node.get_active_slot()
+	if slot == "":
+		return
+	_clear_undo()
+	_prefs_node.delete_slot(slot)
+	refresh()
+
+
+func _on_filter_changed(_new_text: String) -> void:
 	refresh()
 
 
@@ -190,6 +397,7 @@ func _on_set_pressed() -> void:
 	var value: Variant = str_to_var(_value_edit.text.strip_edges())
 	if value == null:
 		value = _value_edit.text
+	_take_undo_snapshot()
 	_prefs_node.set_pref(key, value)
 	refresh()
 
@@ -202,13 +410,36 @@ func _on_delete_pressed() -> void:
 	if key == "":
 		key = _key_edit.text.strip_edges()
 	if key != "":
+		_take_undo_snapshot()
 		_prefs_node.delete_pref(key)
 		refresh()
 
 
 func _on_clear_pressed() -> void:
+	_take_undo_snapshot()
 	_prefs_node.delete_all()
 	refresh()
+
+
+func _on_undo_pressed() -> void:
+	if _undo_snapshot.is_empty() or _undo_slot != _prefs_node.get_active_slot():
+		_clear_undo()
+		refresh()
+		return
+	var snapshot := _undo_snapshot
+	_clear_undo()
+	_prefs_node.restore_prefs(snapshot)
+	refresh()
+
+
+func _take_undo_snapshot() -> void:
+	_undo_snapshot = _prefs_node.get_all()
+	_undo_slot = _prefs_node.get_active_slot()
+
+
+func _clear_undo() -> void:
+	_undo_snapshot = {}
+	_undo_slot = ""
 
 
 func _on_export_pressed() -> void:
@@ -225,5 +456,6 @@ func _on_import_pressed() -> void:
 
 
 func _on_import_file_selected(path: String) -> void:
+	_take_undo_snapshot()
 	if _prefs_node.import_json(path):
 		refresh()

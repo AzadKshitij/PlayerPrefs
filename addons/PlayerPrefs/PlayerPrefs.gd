@@ -239,6 +239,13 @@ func delete_all() -> void:
 	_mark_dirty()
 
 
+## Replaces all preferences with [param data] and persists them (single save).
+## Useful for restoring a snapshot or applying presets.
+func restore_prefs(data: Dictionary) -> void:
+	prefs = data.duplicate(true)
+	_mark_dirty()
+
+
 ## Switches to another save slot. The default slot "" uses "prefs.save",
 ## named slots use "prefs_<name>.save". Uncommitted changes are saved first,
 ## then the slot's data is loaded (empty if the slot has no file yet).
@@ -288,6 +295,38 @@ func delete_slot(slot_name: String) -> void:
 	if slot_name == _slot:
 		prefs.clear()
 		_dirty = false
+
+
+## Renames a save slot. Copies the slot's files (and .bak) to the new name and
+## removes the originals. If the renamed slot is the active one, the in-memory
+## state follows so the next save writes to the new location.
+## Returns true on success; silently returns false for empty names, unknown
+## slots and collisions with an existing slot.
+func rename_slot(from_name: String, to_name: String) -> bool:
+	if from_name == "" or to_name == "":
+		return false
+	from_name = _sanitize_slot(from_name)
+	to_name = _sanitize_slot(to_name)
+	if from_name == to_name:
+		return true
+	if to_name in list_slots():
+		return false
+	if _slot == from_name and _dirty:
+		save_data()
+	var from_path := _build_path(from_name)
+	if not FileAccess.file_exists(from_path):
+		return false
+	var to_path := _build_path(to_name)
+	if DirAccess.copy_absolute(ProjectSettings.globalize_path(from_path), ProjectSettings.globalize_path(to_path)) != OK:
+		push_error("PlayerPrefs: could not copy slot '%s' to '%s'" % [from_name, to_name])
+		return false
+	if FileAccess.file_exists(from_path + ".bak"):
+		DirAccess.copy_absolute(ProjectSettings.globalize_path(from_path + ".bak"), ProjectSettings.globalize_path(to_path + ".bak"))
+	if _slot == from_name:
+		_slot = to_name
+	path = _build_path(_slot)
+	delete_slot(from_name)
+	return true
 
 
 func _build_path(slot_name: String) -> String:

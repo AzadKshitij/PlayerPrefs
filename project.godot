@@ -13,6 +13,7 @@ config_version=5
 compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
+config/tags=PackedStringArray("InProgress")
 
 config/name="PlayerPrefs"
 run/main_scene="res://addons/PlayerPrefs/test_extensive.tscn"

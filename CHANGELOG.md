@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.2 — Better editor dock
+
+- The dock can now rename and delete save slots.
+- Added a search box to quickly filter the preference list.
+- Preferences now show their type (number, text, vector, bool, …) with a color hint.
+- Added an Undo button to revert the last change made in the dock (edit, delete, clear or import).
+- Fixed console errors triggered by typing in the filter and rename fields.
+- The Refresh button now really reloads the save file from disk (the auto-refresh does too).
+- The slot dropdown now switches on the first click and is no longer rebuilt while you are choosing.
+
+New for game code:
+- `rename_slot()` to rename a save slot from scripts.
+- `restore_prefs()` to replace all preferences from a snapshot in one save.
+
 ## 0.4.1 — Simpler saves & fixed editor dock
 
 - Removed file encryption. Save files are now plain and easy to read/edit by hand.
